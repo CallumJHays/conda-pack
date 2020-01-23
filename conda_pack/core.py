@@ -378,7 +378,7 @@ class File(object):
 def pack(name=None, prefix=None, output=None, format='infer',
          arcroot='', dest_prefix=None, verbose=False, force=False,
          compress_level=4, n_threads=1, zip_symlinks=False, zip_64=True,
-         filters=None, ignore_editable_packages=False):
+         filters=None, ignore_editable_packages=False, ignore_package_mods=set()):
     """Package an existing conda environment into an archive file.
 
     Parameters
@@ -442,13 +442,17 @@ def pack(name=None, prefix=None, output=None, format='infer',
     if verbose:
         print("Collecting packages...")
 
+
     if prefix:
         env = CondaEnv.from_prefix(prefix,
-                                   ignore_editable_packages=ignore_editable_packages)
+                                   ignore_editable_packages=ignore_editable_packages,
+                                   ignore_package_mods=ignore_package_mods)
     elif name:
-        env = CondaEnv.from_name(name, ignore_editable_packages=ignore_editable_packages)
+        env = CondaEnv.from_name(name, ignore_editable_packages=ignore_editable_packages,
+                                   ignore_package_mods=ignore_package_mods)
     else:
-        env = CondaEnv.from_default(ignore_editable_packages=ignore_editable_packages)
+        env = CondaEnv.from_default(ignore_editable_packages=ignore_editable_packages,
+                                   ignore_package_mods=ignore_package_mods)
 
     if filters is not None:
         for kind, pattern in filters:
@@ -701,7 +705,8 @@ conda/pip conflicts using `conda list`, and fix the environment by ensuring
 only one version of each package is installed (conda preferred)."""
 
 
-def load_environment(prefix, on_missing_cache='warn', ignore_editable_packages=False):
+def load_environment(prefix, on_missing_cache='warn', ignore_editable_packages=False, ignore_package_mods=set()):
+    print('loading environment')
     # Check if it's a conda environment
     if not os.path.exists(prefix):
         raise CondaPackException("Environment path %r doesn't exist" % prefix)
@@ -727,6 +732,8 @@ def load_environment(prefix, on_missing_cache='warn', ignore_editable_packages=F
     missing_files = []
     for path in os.listdir(conda_meta):
         if path.endswith('.json'):
+            print('')
+
             with open(os.path.join(conda_meta, path)) as fil:
                 info = json.load(fil)
 
@@ -745,7 +752,7 @@ def load_environment(prefix, on_missing_cache='warn', ignore_editable_packages=F
 
             targets = {os.path.normcase(f.target) for f in new_files}
 
-            if targets.difference(all_files):
+            if (info['name'] not in ignore_package_mods) and targets.difference(all_files):
                 # Collect packages missing files as we progress to provide a
                 # complete error message on failure.
                 missing_files.append((info['name'], info['version']))
